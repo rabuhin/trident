@@ -2,18 +2,19 @@ local Repo = 'https://raw.githubusercontent.com/rabuhin/Trident/main/'
 local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua'))()
 
 local function GetModule(path)
-    return loadstring(game:HttpGet(Repo .. path))()
+    local success, result = pcall(function()
+        return game:HttpGet(Repo .. path)
+    end)
+    if success then return loadstring(result)() end
 end
 
 local ESP = GetModule("Modules/ESP.lua")
 _G.TridentConfig = GetModule("Config.lua")
 
--- Создание окна
 local Window = Library:CreateWindow({
-    Title = 'Trident Project | by rabuhin',
+    Title = 'Trident Project | rabuhin',
     Center = true,
     AutoShow = true,
-    TabGuiNavigation = true
 })
 
 local Tabs = {
@@ -21,7 +22,6 @@ local Tabs = {
     Settings = Window:AddTab('Settings'),
 }
 
--- Настройки ESP
 local VisualsSection = Tabs.Main:AddLeftGroupbox('ESP Settings')
 
 VisualsSection:AddToggle('ESPEnabled', {
@@ -31,7 +31,7 @@ VisualsSection:AddToggle('ESPEnabled', {
 })
 
 VisualsSection:AddToggle('OreESP', {
-    Text = 'Show Resources (Ores)',
+    Text = 'Show Resources',
     Default = true,
     Callback = function(Value) _G.TridentConfig.Ores_Enabled = Value end
 })
@@ -42,16 +42,29 @@ VisualsSection:AddSlider('ESPDistance', {
     Callback = function(Value) _G.TridentConfig.ESP_Distance = Value end
 })
 
--- Настройка цветов
-VisualsSection:AddLabel('Menu Accent Color'):AddColorPicker('ColorPicker', {
+-- Исправленная настройка цвета (меняет акцент меню)
+VisualsSection:AddLabel('Menu Color'):AddColorPicker('ColorPicker', {
     Default = Color3.fromRGB(0, 255, 123),
-    Callback = function(Value) Library:SetWatermarkColor(Value) end
+    Callback = function(Value) 
+        Library.AccentColor = Value
+        Library:UpdateColors()
+    end
 })
 
--- Кнопка выгрузки
 local SettingsSection = Tabs.Settings:AddLeftGroupbox('Menu Control')
-SettingsSection:AddButton('Unload Cheat', function() Library:Unload() end)
 
--- Запуск логики
-ESP:Start(_G.TridentConfig)
-Library:Notify("Script Loaded! Use RightControl to hide menu.")
+SettingsSection:AddButton('Unload Cheat', function() 
+    Library:Unload() 
+end)
+
+SettingsSection:AddLabel('Menu Keybind'):AddKeyPicker('MenuKeybind', {
+    Default = 'RightControl',
+    NoUI = true,
+    Text = 'Menu Keybind',
+    Callback = function() Library:Toggle() end
+})
+
+if ESP then
+    ESP:Start(_G.TridentConfig)
+    Library:Notify("Success! Press RightControl to toggle menu.")
+end
