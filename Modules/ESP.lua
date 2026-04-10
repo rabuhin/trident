@@ -1,66 +1,74 @@
-local ESP = { Labels = {}, Connections = {} }
+local ESP = { Objects = {}, Connections = {} }
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
 
-function ESP:AddLabel(obj, text, color)
-    local label = Drawing.new("Text")
-    label.Visible = false
-    label.Center = true
-    label.Outline = true
-    label.Font = 2
-    label.Size = 14
-    label.Color = color
-    table.insert(self.Labels, label)
+local function Create(class, props)
+    local d = Drawing.new(class)
+    for i, v in pairs(props) do d[i] = v end
+    return d
+end
+
+function ESP:CreateESP(player)
+    local box = Create("Square", {Thickness = 1, Filled = false, Transparency = 1, Visible = false})
+    local tracer = Create("Line", {Thickness = 1, Transparency = 1, Visible = false})
+    local name = Create("Text", {Size = 14, Center = true, Outline = true, Visible = false})
 
     local conn = RunService.RenderStepped:Connect(function()
-        if not obj or not obj.Parent or not self.Config.ESP_Enabled then
-            label.Visible = false
-            if not obj or not obj.Parent then label:Remove() end
-            return
-        end
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") and self.Config.ESP_Enabled then
+            local root = char.HumanoidRootPart
+            local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+            
+            if onScreen then
+                local size = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(root.Position + Vector3.new(0, -3, 0)).Y)
+                local boxSize = Vector2.new(size / 1.5, size)
+                local boxPos = Vector2.new(pos.X - boxSize.X / 2, pos.Y - boxSize.Y / 2)
 
-        local pos, onScreen = Camera:WorldToViewportPoint(obj:IsA("Model") and obj:GetPivot().Position or obj.Position)
-        if onScreen then
-            label.Position = Vector2.new(pos.X, pos.Y)
-            label.Text = text
-            label.Visible = true
+                -- Box
+                box.Size = boxSize
+                box.Position = boxPos
+                box.Color = self.Config.Colors.Player
+                box.Visible = true
+
+                -- Tracer
+                tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                tracer.To = Vector2.new(pos.X, pos.Y + (boxSize.Y / 2))
+                tracer.Color = self.Config.Colors.Player
+                tracer.Visible = true
+
+                -- Name
+                name.Text = player.Name
+                name.Position = Vector2.new(pos.X, boxPos.Y - 15)
+                name.Color = Color3.new(1, 1, 1)
+                name.Visible = true
+            else
+                box.Visible = false; tracer.Visible = false; name.Visible = false
+            end
         else
-            label.Visible = false
+            box.Visible = false; tracer.Visible = false; name.Visible = false
         end
     end)
     table.insert(self.Connections, conn)
+    table.insert(self.Objects, {box, tracer, name})
 end
 
 function ESP:Start(Config)
     self.Config = Config
-    -- Игроки
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= Players.LocalPlayer and p.Character then
-            self:AddLabel(p.Character:WaitForChild("HumanoidRootPart", 5), p.Name, Config.Colors.Player)
-        end
+        if p ~= LocalPlayer then self:CreateESP(p) end
     end
-    -- Руда (Trident)
-    task.spawn(function()
-        while task.wait(5) do
-            if self.Config.Ores_Enabled then
-                for _, v in pairs(workspace:GetDescendants()) do
-                    if (v.Name == "SulfurNode" or v.Name == "IronNode") and not v:FindFirstChild("ESPTag") then
-                        Instance.new("BoolValue", v).Name = "ESPTag"
-                        local col = v.Name:find("Sulfur") and Config.Colors.Sulfur or Config.Colors.Iron
-                        self:AddLabel(v, v.Name:gsub("Node", ""), col)
-                    end
-                end
-            end
-        end
-    end)
+    Players.PlayerAdded:Connect(function(p) self:CreateESP(p) end)
 end
 
 function ESP:Unload()
     for _, c in pairs(self.Connections) do c:Disconnect() end
-    for _, l in pairs(self.Labels) do l:Remove() end
+    for _, group in pairs(self.Objects) do
+        for _, obj in pairs(group) do obj:Remove() end
+    end
     table.clear(self.Connections)
-    table.clear(self.Labels)
+    table.clear(self.Objects)
 end
 
 return ESP
