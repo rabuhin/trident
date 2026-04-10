@@ -1,70 +1,52 @@
 local Repo = 'https://raw.githubusercontent.com/rabuhin/Trident/main/'
-local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua'))()
+-- Используем библиотеку в стиле AmongUs Hook / Venyx
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/zxciaz/VenyxUI/main/Reallib.lua"))()
+local Venyx = Library.new("Trident Project | rabuhin")
 
 local function GetModule(path)
-    local success, result = pcall(function()
-        return game:HttpGet(Repo .. path)
-    end)
+    local url = Repo .. path .. "?t=" .. os.time() -- Обход кеша
+    local success, result = pcall(function() return game:HttpGet(url) end)
     if success then return loadstring(result)() end
 end
 
 local ESP = GetModule("Modules/ESP.lua")
 _G.TridentConfig = GetModule("Config.lua")
 
-local Window = Library:CreateWindow({
-    Title = 'Trident Project | rabuhin',
-    Center = true,
-    AutoShow = true,
-})
+-- Темы (AmongUs Hook Style)
+local MainTab = Venyx:addPage("Main", 5012544693)
+local Visuals = MainTab:addSection("Visuals")
+local Settings = MainTab:addPage("Settings", 5012544693)
+local MenuControl = Settings:addSection("Menu Control")
 
-local Tabs = {
-    Main = Window:AddTab('Visuals'),
-    Settings = Window:AddTab('Settings'),
-}
-
-local VisualsSection = Tabs.Main:AddLeftGroupbox('ESP Settings')
-
-VisualsSection:AddToggle('ESPEnabled', {
-    Text = 'Enable ESP',
-    Default = true,
-    Callback = function(Value) _G.TridentConfig.ESP_Enabled = Value end
-})
-
-VisualsSection:AddToggle('OreESP', {
-    Text = 'Show Resources',
-    Default = true,
-    Callback = function(Value) _G.TridentConfig.Ores_Enabled = Value end
-})
-
-VisualsSection:AddSlider('ESPDistance', {
-    Text = 'Max Distance',
-    Default = 2000, Min = 100, Max = 5000, Rounding = 0,
-    Callback = function(Value) _G.TridentConfig.ESP_Distance = Value end
-})
-
--- Исправленная настройка цвета (меняет акцент меню)
-VisualsSection:AddLabel('Menu Color'):AddColorPicker('ColorPicker', {
-    Default = Color3.fromRGB(0, 255, 123),
-    Callback = function(Value) 
-        Library.AccentColor = Value
-        Library:UpdateColors()
-    end
-})
-
-local SettingsSection = Tabs.Settings:AddLeftGroupbox('Menu Control')
-
-SettingsSection:AddButton('Unload Cheat', function() 
-    Library:Unload() 
+Visuals:addToggle("Enable ESP", true, function(val) 
+    _G.TridentConfig.ESP_Enabled = val 
 end)
 
-SettingsSection:AddLabel('Menu Keybind'):AddKeyPicker('MenuKeybind', {
-    Default = 'RightControl',
-    NoUI = true,
-    Text = 'Menu Keybind',
-    Callback = function() Library:Toggle() end
-})
+Visuals:addToggle("Show Resources", true, function(val) 
+    _G.TridentConfig.Ores_Enabled = val 
+end)
+
+Visuals:addSlider("Max Distance", 2000, 100, 5000, function(val) 
+    _G.TridentConfig.ESP_Distance = val 
+end)
+
+-- Настройка цвета в стиле AmongUs Hook
+Visuals:addColorPicker("ESP Color", Color3.fromRGB(0, 255, 123), function(color)
+    Venyx:setTheme("Accent", color)
+end)
+
+-- Тот самый Unload Cheat
+MenuControl:addButton("Unload Cheat", function()
+    if ESP then ESP:Unload() end
+    game:GetService("CoreGui")["Trident Project | rabuhin"]:Destroy()
+    print("--- SCRIPT UNLOADED ---")
+end)
+
+-- Клавиша закрытия меню
+MenuControl:addKeybind("Toggle Menu", Enum.KeyCode.RightControl, function()
+    Venyx:toggle()
+end)
 
 if ESP then
     ESP:Start(_G.TridentConfig)
-    Library:Notify("Success! Press RightControl to toggle menu.")
 end
