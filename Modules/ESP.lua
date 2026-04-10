@@ -1,58 +1,63 @@
-local ESP = {}
+local ESP = { Connection = nil }
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
 
-local function CreateDrawing(class, props)
-    local d = Drawing.new(class)
-    for i, v in pairs(props) do d[i] = v end
-    return d
-end
+function ESP:AddLabel(obj, text, color)
+    local label = Drawing.new("Text")
+    label.Visible = false
+    label.Center = true
+    label.Outline = true
+    label.Font = 2
+    label.Size = 13
+    label.Color = color
 
-function ESP:AddESP(obj, name, color)
-    local text = CreateDrawing("Text", {Text = name, Color = color, Size = 16, Outline = true, Center = true, Visible = false})
-    
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not obj or not obj.Parent then
-            text:Remove()
-            connection:Disconnect()
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not obj or not obj.Parent or not self.Config.ESP_Enabled then
+            label.Visible = false
+            if not obj or not obj.Parent then label:Remove(); conn:Disconnect() end
             return
         end
-        
+
         local pos, onScreen = Camera:WorldToViewportPoint(obj:IsA("Model") and obj:GetPivot().Position or obj.Position)
-        if onScreen and self.Config.ESP_Enabled then
-            text.Position = Vector2.new(pos.X, pos.Y)
-            text.Visible = true
+        local dist = (Camera.CFrame.Position - (obj:IsA("Model") and obj:GetPivot().Position or obj.Position)).Magnitude
+
+        if onScreen and dist <= self.Config.ESP_Distance then
+            label.Position = Vector2.new(pos.X, pos.Y)
+            label.Text = text .. " [" .. math.floor(dist) .. "m]"
+            label.Visible = true
         else
-            text.Visible = false
+            label.Visible = false
         end
     end)
 end
 
 function ESP:Start(Config)
     self.Config = Config
-    
-    -- ESP на игроков
-    Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function(char)
-            self:AddESP(char:WaitForChild("HumanoidRootPart"), p.Name, Config.Colors.Player)
-        end)
-    end)
+    -- Сканируем игроков
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            self:AddESP(p.Character:FindFirstChild("HumanoidRootPart"), p.Name, Config.Colors.Player)
+        if p ~= Players.LocalPlayer and p.Character then 
+            self:AddLabel(p.Character:WaitForChild("HumanoidRootPart", 5), p.Name, Config.Colors.Player) 
         end
     end
-
-    -- ESP на ресурсы Trident (Sulfur, Iron)
-    if workspace:FindFirstChild("Resources") then
-        for _, ore in pairs(workspace.Resources:GetChildren()) do
-            local color = ore.Name:find("Sulfur") and Config.Colors.Sulfur or Config.Colors.Iron
-            self:AddESP(ore, ore.Name, color)
+    
+    -- Сканируем ресурсы (Trident-Specific)
+    task.spawn(function()
+        while task.wait(5) do -- Обновляем поиск каждые 5 сек, чтобы не лагало
+            if self.Config.Ores_Enabled then
+                for _, v in pairs(workspace:GetDescendants()) do
+                    if v.Name == "SulfurNode" or v.Name == "IronNode" then
+                        if not v:FindFirstChild("ESPTag") then
+                            local tag = Instance.new("BoolValue", v); tag.Name = "ESPTag"
+                            local col = v.Name:find("Sulfur") and Config.Colors.Sulfur or Config.Colors.Iron
+                            self:AddLabel(v, v.Name:gsub("Node", ""), col)
+                        end
+                    end
+                end
+            end
         end
-    end
+    end)
 end
 
 return ESP
