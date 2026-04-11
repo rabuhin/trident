@@ -1,48 +1,50 @@
--- [ FIX: MISSING FUNCTIONS ]
+-- [[ TRIDENT PROJECT: ULTIMATE RECONSTRUCTION ]]
+
+-- 1. Исправление окружения для Potassium
 if (type(getgenv) == 'function' and getgenv().setfflag == nil) then
-      getgenv().setfflag = function() end;
+    getgenv().setfflag = function() end;
 end;
 
 local request = request or http_request
-local executor = identifyexecutor and identifyexecutor() or "Unknown"
+local Repo = "https://raw.githubusercontent.com/rabuhin/Trident/main/Modules/"
 
--- Функция загрузки через request (как в README амонгус-хука)
-local function RequestLoad(file)
-    local url = "https://raw.githubusercontent.com/rabuhin/Trident/main/" .. file .. "?t=" .. os.time()
-    local success, response = pcall(request, {Url = url, Method = "GET"})
+-- Функция загрузки через Request (как в амонгус-хуке)
+local function GetModule(name)
+    local success, response = pcall(request, {
+        Url = Repo .. name .. "?t=" .. os.time(), 
+        Method = "GET"
+    })
     if success and response.StatusCode == 200 then
-        local func = loadstring(response.Body)
-        if func then return func() end
+        return loadstring(response.Body)()
     end
-    warn("[Trident] Critical fail on: " .. file)
+    warn("[Trident] Missing module: " .. name)
 end
 
--- 1. Исправляем Drawing API
-if not getgenv().Drawing then
-    RequestLoad("Modules/DrawingFix.lua")
+-- 2. Инициализация критических систем
+-- Сначала запускаем мост для отрисовки в акторах
+local actorFixSource = GetModule("actorDrawingFix.lua")
+if actorFixSource then
+    -- Этот модуль возвращает строку-скрипт для актора, запускаем её
+    loadstring(actorFixSource)()
 end
 
--- 2. Загружаем UI библиотеку через request (обход блокировок)
-local libContent = request({Url='https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua', Method='GET'}).Body
-local Library = loadstring(libContent)()
+-- Настраиваем шрифты под экзекутор
+GetModule("drawingSetup.lua")
 
--- 3. Создаем меню
-local Window = Library.CreateLib("Trident Project | " .. executor, "DarkTheme")
+-- 3. Загрузка библиотек
+local uiLibrary = GetModule("uiLibrary.lua")
+local espLibrary = GetModule("espLibrary.lua")
 
--- 4. Загружаем конфиг и ESP
-_G.TridentConfig = RequestLoad("Config.lua")
-local ESP = RequestLoad("Modules/ESP.lua")
+-- 4. Инициализация (Пример на Kavo, пока ты не решишь перейти на UI амонгуса)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("Trident Project | Actors Fixed", "DarkTheme")
 
--- [ ИНТЕРФЕЙС ]
 local MainTab = Window:NewTab("Visuals")
-local Section = MainTab:NewSection("ESP Settings")
+local Section = MainTab:NewSection("ESP Logic")
 
-Section:NewToggle("Enable ESP", "Запуск отрисовки", function(state)
-    if _G.TridentConfig then _G.TridentConfig.ESP_Enabled = state end
+Section:NewToggle("Enable ESP", "Запуск через Parallel Drawing", function(state)
+    _G.TridentConfig.ESP_Enabled = state
 end)
 
--- [ СТАРТ ]
-if ESP and _G.TridentConfig then
-    pcall(function() ESP:Start(_G.TridentConfig) end)
-    print("[Trident] All systems online")
-end
+print("[Trident] Parallel Drawing Bridge: ACTIVE")
+print("[Trident] ESP Logic: LOADED")
