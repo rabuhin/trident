@@ -1,73 +1,48 @@
--- [ POTASSIUM / WAVE HOTFIX ]
--- Создаем заглушку для функции setfflag, если экзекутор её не поддерживает.
--- Это предотвращает вылеты интерфейса Kavo.
+-- [ FIX: MISSING FUNCTIONS ]
 if (type(getgenv) == 'function' and getgenv().setfflag == nil) then
-    getgenv().setfflag = function() end;
+      getgenv().setfflag = function() end;
 end;
 
--- [[ TRIDENT PROJECT: ADVANCED LOADER ]]
-local executor = identifyexecutor and identifyexecutor() or "Unknown"
 local request = request or http_request
+local executor = identifyexecutor and identifyexecutor() or "Unknown"
 
--- Защищенная функция загрузки с проверкой статус-кода (как в amongus.hook)
-local function SafeLoad(file)
+-- Функция загрузки через request (как в README амонгус-хука)
+local function RequestLoad(file)
     local url = "https://raw.githubusercontent.com/rabuhin/Trident/main/" .. file .. "?t=" .. os.time()
     local success, response = pcall(request, {Url = url, Method = "GET"})
-    
     if success and response.StatusCode == 200 then
-        local func, err = loadstring(response.Body)
-        if func then 
-            return func() 
-        else
-            warn("[Trident] Syntax Error in " .. file .. ": " .. err)
-        end
-    else
-        warn("[Trident] Failed to load " .. file .. " | Status: " .. (response and response.StatusCode or "No Response"))
+        local func = loadstring(response.Body)
+        if func then return func() end
     end
+    warn("[Trident] Critical fail on: " .. file)
 end
 
--- 1. Исправляем Drawing API (если его нет в Potassium)
+-- 1. Исправляем Drawing API
 if not getgenv().Drawing then
-    SafeLoad("Modules/DrawingFix.lua")
+    RequestLoad("Modules/DrawingFix.lua")
 end
 
--- 2. Загружаем библиотеку интерфейса
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+-- 2. Загружаем UI библиотеку через request (обход блокировок)
+local libContent = request({Url='https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua', Method='GET'}).Body
+local Library = loadstring(libContent)()
 
--- 3. Создаем окно (Без функций типа SetWatermarkColor, которые вызывают ошибки)
+-- 3. Создаем меню
 local Window = Library.CreateLib("Trident Project | " .. executor, "DarkTheme")
 
--- 4. Загружаем компоненты через защищенный загрузчик
-_G.TridentConfig = SafeLoad("Config.lua")
-local ESP = SafeLoad("Modules/ESP.lua")
+-- 4. Загружаем конфиг и ESP
+_G.TridentConfig = RequestLoad("Config.lua")
+local ESP = RequestLoad("Modules/ESP.lua")
 
--- [[ ИНТЕРФЕЙС ]]
+-- [ ИНТЕРФЕЙС ]
 local MainTab = Window:NewTab("Visuals")
-local VisSection = MainTab:NewSection("Player ESP")
+local Section = MainTab:NewSection("ESP Settings")
 
-VisSection:NewToggle("Enable ESP", "Отрисовка через Drawing API", function(state)
-    if _G.TridentConfig then 
-        _G.TridentConfig.ESP_Enabled = state 
-    end
+Section:NewToggle("Enable ESP", "Запуск отрисовки", function(state)
+    if _G.TridentConfig then _G.TridentConfig.ESP_Enabled = state end
 end)
 
-local SetTab = Window:NewTab("Settings")
-local SetSection = SetTab:NewSection("Config Control")
-
-SetSection:NewButton("Unload & Clean", "Полная очистка скрипта", function()
-    if ESP and ESP.Unload then ESP:Unload() end
-    Library:Unload()
-end)
-
--- [[ ЗАПУСК ЛОГИКИ ]]
+-- [ СТАРТ ]
 if ESP and _G.TridentConfig then
-    local startSuccess, err = pcall(function()
-        ESP:Start(_G.TridentConfig)
-    end)
-    
-    if startSuccess then
-        print("[Trident] ESP Module Started Successfully on " .. executor)
-    else
-        warn("[Trident] Failed to start ESP logic: " .. tostring(err))
-    end
+    pcall(function() ESP:Start(_G.TridentConfig) end)
+    print("[Trident] All systems online")
 end
