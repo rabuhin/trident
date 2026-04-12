@@ -1,8 +1,8 @@
--- [[ TRIDENT PROJECT: STABLE REBUILT ]]
+-- [[ TRIDENT REBORN ]]
 pcall(function() setfflag('DebugRunParallelLuaOnMainThread', 'True') end)
 
 local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/wally-rbIx/LinoriaLib/main/Library.lua'))()
-local Window = Library:CreateWindow({ Title = 'Trident | STABLE BUILD', Center = true, AutoShow = true })
+local Window = Library:CreateWindow({ Title = 'Trident | Final Fix', Center = true, AutoShow = true })
 
 local Tabs = {
     Combat = Window:AddTab('Combat'),
@@ -10,133 +10,84 @@ local Tabs = {
     Settings = Window:AddTab('Settings')
 }
 
-_G.Config = {
-    ESP = false,
-    SilentAim = false,
-    NoRecoil = false,
-    FOV = 150,
-    MaxDist = 600
-}
-
+_G.Config = { ESP = false, SAim = false, Recoil = false, Dist = 600 }
 local ESP_Table = {}
 
--- [[ 1. COMBAT: SILENT AIM & NO RECOIL ]]
-local function GetClosestToMouse()
-    local target = nil
-    local maxDist = _G.Config.FOV
-    local mousePos = game:GetService("UserInputService"):GetMouseLocation()
-
+-- [[ 1. COMBAT (SILENT AIM) ]]
+local function GetTarget()
+    local target, nearest = nil, 150
+    local mouse = game:GetService("UserInputService"):GetMouseLocation()
     for _, p in pairs(game.Players:GetPlayers()) do
         if p ~= game.Players.LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-            local head = p.Character.Head
-            local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
-            if onScreen then
-                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                if dist < maxDist then
-                    maxDist = dist
-                    target = head
-                end
+            local pos, vis = workspace.CurrentCamera:WorldToViewportPoint(p.Character.Head.Position)
+            if vis then
+                local mDist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
+                if mDist < nearest then nearest = mDist; target = p.Character.Head end
             end
         end
     end
     return target
 end
 
-local OldNamecall
-OldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+local OldNC; OldNC = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
-
-    if _G.Config.SilentAim and method == "FireServer" and self.Name == "Network" and args[1] == "ProjectileFire" then
-        local target = GetClosestToMouse()
-        if target then
-            args[3] = target.Position
-            return OldNamecall(self, unpack(args))
-        end
+    if _G.Config.SAim and method == "FireServer" and self.Name == "Network" and args[1] == "ProjectileFire" then
+        local t = GetTarget()
+        if t then args[3] = t.Position; return OldNC(self, unpack(args)) end
     end
-    
-    if _G.Config.NoRecoil and method == "Recoil" then return end
-    return OldNamecall(self, ...)
+    if _G.Config.Recoil and method == "Recoil" then return end
+    return OldNC(self, ...)
 end))
 
--- [[ 2. VISUALS: ESP ]]
-local function ApplyESP(player)
-    if player == game.Players.LocalPlayer then return end
-    
+-- [[ 2. VISUALS (ULTRA-STABLE ESP) ]]
+local function CreateESP(p)
     local box = Drawing.new("Square")
-    box.Visible = false
-    box.Thickness = 1
-    box.Color = Color3.fromRGB(255, 255, 255)
+    local txt = Drawing.new("Text")
+    txt.Size = 14; txt.Center = true; txt.Outline = true
 
-    local name = Drawing.new("Text")
-    name.Visible = false
-    name.Size = 14
-    name.Center = true
-    name.Outline = true
-    name.Color = Color3.fromRGB(255, 255, 255)
-
-    local connection = game:GetService("RunService").RenderStepped:Connect(function()
-        if not _G.Config.ESP then 
-            box.Visible = false; name.Visible = false
-            return 
-        end
-
-        local char = player.Character or workspace:FindFirstChild(player.Name)
+    local c; c = game:GetService("RunService").RenderStepped:Connect(function()
+        if not _G.Config.ESP then box.Visible = false; txt.Visible = false; return end
+        local char = p.Character or workspace:FindFirstChild(p.Name)
         if char and char:FindFirstChild("HumanoidRootPart") then
             local root = char.HumanoidRootPart
-            local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
-            
-            if onScreen then
-                local dist = (root.Position - workspace.CurrentCamera.CFrame.Position).Magnitude
-                if dist <= _G.Config.MaxDist then
-                    local size = 2000 / dist
-                    box.Size = Vector2.new(size, size * 1.5)
-                    box.Position = Vector2.new(pos.X - size/2, pos.Y - size/2)
-                    box.Visible = true
-
-                    name.Text = player.Name .. " [" .. math.floor(dist) .. "m]"
-                    name.Position = Vector2.new(pos.X, pos.Y - size/2 - 15)
-                    name.Visible = true
-                else
-                    box.Visible = false; name.Visible = false
-                end
-            else
-                box.Visible = false; name.Visible = false
-            end
-        else
-            box.Visible = false; name.Visible = false
-        end
+            local pos, vis = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+            local dist = (root.Position - workspace.CurrentCamera.CFrame.Position).Magnitude
+            if vis and dist < _G.Config.Dist then
+                local s = 2000 / dist
+                box.Size = Vector2.new(s, s * 1.5)
+                box.Position = Vector2.new(pos.X - s/2, pos.Y - s/2)
+                box.Visible = true
+                txt.Text = p.Name .. " [" .. math.floor(dist) .. "]"
+                txt.Position = Vector2.new(pos.X, pos.Y - s/2 - 15)
+                txt.Visible = true
+            else box.Visible = false; txt.Visible = false end
+        else box.Visible = false; txt.Visible = false end
     end)
-    ESP_Table[player] = {box, name, connection}
+    ESP_Table[p] = {box, txt, c}
 end
 
--- [[ 3. ИНТЕРФЕЙС ]]
-local CombatGroup = Tabs.Combat:AddLeftGroupbox('Combat')
-CombatGroup:AddToggle('SAim', { Text = 'Silent Aim', Default = false, Callback = function(v) _G.Config.SilentAim = v end })
-CombatGroup:AddToggle('NRec', { Text = 'No Recoil', Default = false, Callback = function(v) _G.Config.NoRecoil = v end })
+-- [[ 3. INTERFACE (ИСПРАВЛЕННЫЕ МЕТОДЫ) ]]
+local CombatBox = Tabs.Combat:AddLeftGroupbox('Combat')
+CombatBox:AddToggle('SA', { Text = 'Silent Aim', Default = false }):OnChanged(function() _G.Config.SAim = Toggles.SA.Value end)
+CombatBox:AddToggle('NR', { Text = 'No Recoil', Default = false }):OnChanged(function() _G.Config.Recoil = Toggles.NR.Value end)
 
-local VisualGroup = Tabs.Visuals:AddLeftGroupbox('Visuals')
-VisualGroup:AddToggle('EspT', { Text = 'Enable ESP', Default = false, Callback = function(v) _G.Config.ESP = v end })
+local VisualBox = Tabs.Visuals:AddLeftGroupbox('Visuals')
+VisualBox:AddToggle('E', { Text = 'Enable ESP', Default = false }):OnChanged(function() _G.Config.ESP = Toggles.E.Value end)
 
--- КНОПКА UNLOAD (ВОЗВРАЩЕНА)
-local SettingsGroup = Tabs.Settings:AddLeftGroupbox('Menu Settings')
-SettingsGroup:AddButton('UNLOAD CHEAT', function()
-    _G.Config.ESP = false
-    _G.Config.SilentAim = false
-    _G.Config.NoRecoil = false
-    task.wait(0.1)
-    for _, obj in pairs(ESP_Table) do
-        pcall(function()
-            obj[1]:Remove()
-            obj[2]:Remove()
-            obj[3]:Disconnect()
-        end)
-    end
-    Library:Unload()
-end)
+local SettingsBox = Tabs.Settings:AddLeftGroupbox('Menu')
+-- Исправленный вызов кнопки:
+SettingsBox:AddButton({
+    Text = 'UNLOAD CHEAT',
+    Func = function()
+        _G.Config.ESP = false
+        for _, o in pairs(ESP_Table) do o[1]:Remove(); o[2]:Remove(); o[3]:Disconnect() end
+        Library:Unload()
+    end,
+    DoubleClick = false
+})
 
--- Запуск
-for _, p in pairs(game.Players:GetPlayers()) do ApplyESP(p) end
-game.Players.PlayerAdded:Connect(ApplyESP)
+for _, p in pairs(game.Players:GetPlayers()) do if p ~= game.Players.LocalPlayer then CreateESP(p) end end
+game.Players.PlayerAdded:Connect(CreateESP)
 
-Library:Notify("Trident Rebuilt: Ready")
+Library:Notify("Fixed Build Loaded!")
